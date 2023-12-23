@@ -56,6 +56,37 @@
 	(slot confidence (type NUMBER))
 )	
 
+(defrule add_confidence
+	(declare (salience 10))
+	?f1 <- (fact_with_confidence (fact ?fact) (confidence ?confidence1))
+	?f2 <- (fact_with_confidence (fact ?fact) (confidence ?confidence2))
+	(test (neq ?f1 ?f2))
+	(test (< ?confidence1 1.0))
+	(test (< ?confidence2 1.0))
+	=>
+	(bind ?sum (+ ?confidence1 ?confidence2))
+	(bind ?res_confidence (min 1.0 ?sum))
+	(retract ?f1)
+	(retract ?f2)
+	(assert (fact_with_confidence (fact ?fact) (confidence ?res_confidence)))
+	(assert (sendmessagehalt "Встречен повтор факта:" ?fact "Уверенность просуммирована, результат: " (str-cat ?res_confidence)))
+)
+
+(defrule remove_extra_fact
+	(declare (salience 11))
+	?f1 <- (fact_with_confidence (fact ?fact) (confidence ?confidence1))
+	?f2 <- (fact_with_confidence (fact ?fact) (confidence ?confidence2))
+	(test (neq ?f1 ?f2))
+	(test (or (>= ?confidence1 1.0) (>= ?confidence2 1.0)))
+	=>
+	(if (>= ?confidence1 1.0)
+    	then
+    	(retract ?f2)
+    	else
+	(retract ?f1))
+	(run)
+)
+
 (defrule set-fact-and-halt
 	(declare (salience 98))
 	?proxy <- (add-fact (fact ?fact) (confidence ?confidence))

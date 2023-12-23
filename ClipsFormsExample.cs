@@ -10,6 +10,7 @@ using System.Threading.Tasks;
 using System.Windows.Forms;
 
 using CLIPSNET;
+using static System.Windows.Forms.VisualStyles.VisualStyleElement;
 
 
 namespace ClipsFormsExample
@@ -48,7 +49,7 @@ namespace ClipsFormsExample
             MultifieldValue damf = (MultifieldValue)fv["messages"];
             MultifieldValue vamf = (MultifieldValue)fv["answers"];
 
-            outputBox.Text += "Новая итерация : " + System.Environment.NewLine;
+            outputBox.Text += "---------------------------------------------------------'\r\nНовая итерация : " + System.Environment.NewLine;
             for (int i = 0; i < damf.Count; i++)
             {
                 LexemeValue da = (LexemeValue)damf[i];
@@ -57,9 +58,9 @@ namespace ClipsFormsExample
                 //synth.SpeakAsync(message);
                 outputBox.Text += message + System.Environment.NewLine;
             }
-           
-            
-            if(vamf.Count == 0)
+            outputBox.SelectionStart = outputBox.TextLength;
+            outputBox.ScrollToCaret();
+            if (vamf.Count == 0)
                 clips.Eval("(assert (clearmessage))");
         }
 
@@ -146,14 +147,24 @@ namespace ClipsFormsExample
                         {
                             ruleConfidence = double.Parse(ruleConf[1].Trim(), NumberStyles.Any, CultureInfo.InvariantCulture);
                         }
-                        StringBuilder defrule = new StringBuilder($"(defrule rule{ruleNum}\r\n");
+                        StringBuilder defrule = new StringBuilder($"(defrule rule{ruleNum}_preprocess\r\n");
                         int salience = int.Parse(premiseResult[1].Trim()[1].ToString());
                         if (salience == 6 || salience < 3)
                         {
                             salience = 0;
                         }
+                        salience *= 2;
+                        defrule.Append($"\t(declare (salience {salience + 1}))\r\n");
+                        defrule.Append($"\t?r_conf <- (rule_confidence (ruleNumber {ruleNum}) (confidence {ruleConfidence.ToString(CultureInfo.InvariantCulture)}))\r\n");
+                        defrule.Append($"\t(fact_with_confidence (fact \"{facts[premiseResult[1].Trim()]}\") (confidence 1.0))\r\n");
+                        defrule.Append($"=>\r\n");
+                        defrule.Append($"\t(retract ?r_conf)\r\n");
+                        defrule.Append($"\t(run)\r\n)\r\n");
+                        database.Append(defrule);
+
+                        defrule = new StringBuilder($"(defrule rule{ruleNum}\r\n");
                         defrule.Append($"\t(declare (salience {salience}))\r\n");
-                        defrule.Append($"\t(rule_confidence (ruleNumber {ruleNum}) (confidence {ruleConfidence.ToString(CultureInfo.InvariantCulture)}))\r\n");
+                        defrule.Append($"\t?r_conf <- (rule_confidence (ruleNumber {ruleNum}) (confidence {ruleConfidence.ToString(CultureInfo.InvariantCulture)}))\r\n");
                         int i = 1;
                         foreach (String premise in premiseResult[0].Split(','))
                         {
@@ -172,8 +183,10 @@ namespace ClipsFormsExample
                         defrule.Append("))\r\n");
                         defrule.Append($"\t(bind ?res_confidence (* ?min_fact_confidence {ruleConfidence.ToString(CultureInfo.InvariantCulture)}))\r\n");
                         defrule.Append($"\t(assert (fact_with_confidence (fact \"{facts[premiseResult[1].Trim()]}\") (confidence ?res_confidence)))\r\n");
-                        defrule.Append($"\t(assert (sendmessagehalt \"Выведено: {facts[premiseResult[1].Trim()]} с уверенностью \" (str-cat ?res_confidence)))\r\n)\r\n");
+                        defrule.Append($"\t(assert (sendmessagehalt \"Выведено: {facts[premiseResult[1].Trim()]} с уверенностью \" (str-cat ?res_confidence)))\r\n");
+                        defrule.Append($"\t(retract ?r_conf)\r\n)\r\n");
                         database.Append(defrule);
+
                         ruleConfidenceFacts.Add($"(assert (rule_confidence (ruleNumber {ruleNum}) (confidence {ruleConfidence.ToString(CultureInfo.InvariantCulture)})))");
                         ruleNum += 1;
                     }
@@ -198,17 +211,6 @@ namespace ClipsFormsExample
         {
             string requirement = requirementDropdown.GetItemText(requirementDropdown.Items[requirementDropdown.SelectedIndex]);
             clips.Eval($"(assert (add-fact (fact \"{requirement}\") (confidence {requirementConfidenceTB.Text})))");
-            clips.Run();
-            print_facts();
-            clips.Run();
-            print_facts();
-            HandleResponse();
-        }
-
-        private void languagePropertyPick_Click(object sender, EventArgs e)
-        {
-            string property = languagePropertyDropdown.GetItemText(languagePropertyDropdown.Items[languagePropertyDropdown.SelectedIndex]);
-            clips.Eval($"(assert (add-fact (fact \"{property}\") (confidence {languagePropertyConfidenceTB.Text})))");
             clips.Run();
             print_facts();
             clips.Run();
