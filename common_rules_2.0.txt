@@ -1,0 +1,81 @@
+;========================================================================
+; Этот блок реализует логику обмена информацией с графической оболочкой,
+; а также механизм остановки и повторного пуска машины вывода
+; Русский текст в комментариях разрешён!
+
+(deftemplate ioproxy  ; шаблон факта-посредника для обмена информацией с GUI
+	(slot fact-id)        ; теоретически тут id факта для изменения
+	(multislot answers)   ; возможные ответы
+	(multislot messages)  ; исходящие сообщения
+	(slot reaction)       ; возможные ответы пользователя
+	(slot value)          ; выбор пользователя
+	(slot restore)        ; забыл зачем это поле
+)
+
+; Собственно экземпляр факта ioproxy
+(deffacts proxy-fact
+	(ioproxy
+		(fact-id 0112) ; это поле пока что не задействовано
+		(value none)   ; значение пустое
+		(messages)     ; мультислот messages изначально пуст
+	)
+)
+
+(defrule clear-messages
+	(declare (salience 90))
+	?clear-msg-flg <- (clearmessage)
+	?proxy <- (ioproxy)
+	=>
+	(modify ?proxy (messages))
+	(retract ?clear-msg-flg)
+	(printout t "Messages cleared ..." crlf)	
+)
+
+(defrule set-output-and-halt
+	(declare (salience 99))
+	?current-message <- (sendmessagehalt $?new-msg)
+	?proxy <- (ioproxy (messages $?msg-list))
+	=>
+	(modify ?proxy (messages ?new-msg))
+	(retract ?current-message)
+	(halt)
+)
+
+(deftemplate fact_with_confidence
+	(slot fact)
+	(slot confidence (type NUMBER))
+)
+
+(deftemplate rule_confidence
+	(slot ruleNumber (type NUMBER))
+	(slot confidence (type NUMBER))
+)	
+
+(deftemplate add-fact ;шаблон факта-посредника для выбора типа проекта
+	(slot fact)
+	(slot confidence (type NUMBER))
+)	
+
+(defrule set-fact-and-halt
+	(declare (salience 98))
+	?proxy <- (add-fact (fact ?fact) (confidence ?confidence))
+	=>
+	(assert (fact_with_confidence (fact ?fact) (confidence ?confidence)))
+	(retract ?proxy)
+	(assert (sendmessagehalt "Добавлен факт:" ?fact  (str-cat ?confidence)))
+	(halt)
+)
+
+;(defrule append-output-and-halt
+;	//  Аналогичен предыдущему, но с добавлением сообщения, а не с заменой
+;)
+
+;(defrule set-output-and-proceed
+;	//  Аналогичен предыдущему, но с установкой сообщения и продолжением работы (извлекая факт с текущим сообщением)
+;)
+
+;(defrule append-output-and-proceed
+;	//  По аналогии
+;)
+
+;======================================================================================
