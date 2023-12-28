@@ -78,7 +78,9 @@ namespace ClipsFormsExample
 
         private void nextBtn_Click(object sender, EventArgs e)
         {
+            print_facts();
             clips.Run();
+            print_facts();
             HandleResponse();
         }
 
@@ -92,11 +94,6 @@ namespace ClipsFormsExample
             clips.LoadFromString(codeBox.Text);
 
             clips.Reset();
-
-            foreach(var fact in ruleConfidenceFacts)
-            {
-                clips.Eval(fact);
-            }
         }
 
         String map_fact_number_to_group(String fact)
@@ -143,51 +140,87 @@ namespace ClipsFormsExample
                         String[] premiseResult = ruleConf[0].Split('=');
                         String resultGroup = map_fact_number_to_group(premiseResult[1].Trim());
                         double ruleConfidence = 0.9;
+                        
                         if (ruleConf.Length > 1 && ruleConf[1].Trim().Length > 0)
                         {
                             ruleConfidence = double.Parse(ruleConf[1].Trim(), NumberStyles.Any, CultureInfo.InvariantCulture);
                         }
-                        StringBuilder defrule = new StringBuilder($"(defrule rule{ruleNum}_preprocess\r\n");
                         int salience = int.Parse(premiseResult[1].Trim()[1].ToString());
                         if (salience == 6 || salience < 3)
                         {
                             salience = 0;
                         }
-                        salience *= 2;
-                        defrule.Append($"\t(declare (salience {salience + 1}))\r\n");
-                        defrule.Append($"\t?r_conf <- (rule_confidence (ruleNumber {ruleNum}) (confidence {ruleConfidence.ToString(CultureInfo.InvariantCulture)}))\r\n");
-                        defrule.Append($"\t(fact_with_confidence (fact \"{facts[premiseResult[1].Trim()]}\") (confidence 1.0))\r\n");
-                        defrule.Append($"=>\r\n");
-                        defrule.Append($"\t(retract ?r_conf)\r\n");
-                        defrule.Append($"\t(run)\r\n)\r\n");
-                        database.Append(defrule);
-
-                        defrule = new StringBuilder($"(defrule rule{ruleNum}\r\n");
-                        defrule.Append($"\t(declare (salience {salience}))\r\n");
-                        defrule.Append($"\t?r_conf <- (rule_confidence (ruleNumber {ruleNum}) (confidence {ruleConfidence.ToString(CultureInfo.InvariantCulture)}))\r\n");
+                        StringBuilder defrule = new StringBuilder($"(defrule rule{ruleNum}_preprocess\r\n");
+                        /*defrule.Append($"\t(declare (salience {salience * 2 + 1}))\r\n");
                         int i = 1;
                         foreach (String premise in premiseResult[0].Split(','))
                         {
                             String premiseGroup = map_fact_number_to_group(premise.Trim());
-                            defrule.Append($"\t(fact_with_confidence (fact \"{facts[premise.Trim()]}\") (confidence ?f{i}_confidence))\r\n");
+                            defrule.Append($"\t(fact_with_confidence (fact \"{facts[premise.Trim()]}\") (confidence ?f{i}_cf))\r\n");
+                            i++;
+                        }
+                        defrule.Append($"\t?f <- (fact_with_confidence (fact \"{facts[premiseResult[1].Trim()]}\") (confidence ?cf))\r\n");
+                        defrule.Append($"=>\r\n");
+                        defrule.Append($"\t(retract ?f)\r\n");
+                        defrule.Append($"\t(run)\r\n)\r\n");
+                        database.Append(defrule);*/
+
+                        defrule = new StringBuilder($"(defrule rule{ruleNum}\r\n");
+                        defrule.Append($"\t(declare (salience {7 - salience}))\r\n");
+                        int i = 1;
+                        foreach (String premise in premiseResult[0].Split(','))
+                        {
+                            String premiseGroup = map_fact_number_to_group(premise.Trim());
+                            defrule.Append($"\t(fact_with_confidence (fact \"{facts[premise.Trim()]}\") (confidence ?f{i}_cf))\r\n");
                             i++;
                         }
                         defrule.Append($"=>\r\n");
-                        defrule.Append($"\t(bind ?min_fact_confidence (min 1.0");
+                        defrule.Append($"\t(bind ?min_cf (min 1.0");
                         i--;
                         while (i >= 1)
                         {
-                            defrule.Append($" ?f{i}_confidence");
+                            defrule.Append($" ?f{i}_cf");
                             i--;
                         }
                         defrule.Append("))\r\n");
-                        defrule.Append($"\t(bind ?res_confidence (* ?min_fact_confidence {ruleConfidence.ToString(CultureInfo.InvariantCulture)}))\r\n");
-                        defrule.Append($"\t(assert (fact_with_confidence (fact \"{facts[premiseResult[1].Trim()]}\") (confidence ?res_confidence)))\r\n");
-                        defrule.Append($"\t(assert (sendmessagehalt \"Выведено: {facts[premiseResult[1].Trim()]} с уверенностью \" (str-cat ?res_confidence)))\r\n");
-                        defrule.Append($"\t(retract ?r_conf)\r\n)\r\n");
+
+                        defrule.Append($"\t(bind ?min_cf (max 0 ?min_cf))\r\n");
+                        /*defrule.Append($"\t(bind ?min_pos 10)\r\n");
+                        defrule.Append($"\t(bind ?max_neg -10)\r\n");
+                        int j = 1;
+                        while (j < i)
+                        {
+                            defrule.Append($"\t(if (> ?f{j}_cf 0)\r\n");
+                            defrule.Append($"\tthen\r\n");
+                            defrule.Append($"\t(bind ?min_pos (min ?min_pos ?f{j}_cf))\r\n");
+                            defrule.Append($"\telse\r\n");
+                            defrule.Append($"\t(bind ?max_neg (max ?max_neg ?f{j}_cf))\r\n");
+                            defrule.Append($"\t)\r\n");
+                            j++;
+                        }
+                        defrule.Append($"\t(bind ?facts_comb 0)\r\n");
+
+                        defrule.Append($"\t(if (eq ?max_neg -10)\r\n");
+                        defrule.Append($"\tthen\r\n");
+                        defrule.Append($"\t(bind ?facts_comb (+ 0 ?facts_comb))\r\n");
+                        defrule.Append($"\telse\r\n");
+                        defrule.Append($"\t(bind ?facts_comb (+ ?max_neg ?facts_comb))\r\n");
+                        defrule.Append($"\t)\r\n");
+
+                        defrule.Append($"\t(if (eq ?min_pos 10)\r\n");
+                        defrule.Append($"\tthen\r\n");
+                        defrule.Append($"\t(bind ?facts_comb (+ 0 ?facts_comb))\r\n");
+                        defrule.Append($"\telse\r\n");
+                        defrule.Append($"\t(bind ?facts_comb (+ ?min_pos ?facts_comb))\r\n");
+                        defrule.Append($"\t)\r\n");*/
+
+                        var rulCf = ruleConfidence.ToString(CultureInfo.InvariantCulture);
+                        /*defrule.Append($"\t(bind ?res_сf (/ (* ?facts_comb {rulCf}) (- (+ ?facts_comb {rulCf}) (* ?facts_comb {rulCf}))))\r\n");*/
+                        defrule.Append($"\t(bind ?res_сf (* ?min_cf {rulCf}))\r\n");
+                        defrule.Append($"\t(assert (fact_with_confidence (fact \"{facts[premiseResult[1].Trim()]}\") (confidence ?res_сf)))\r\n");
+                        defrule.Append($"\t(assert (sendmessagehalt \"Выведено: {facts[premiseResult[1].Trim()]} с уверенностью \" (str-cat ?res_сf)))\r\n)\r\n");
                         database.Append(defrule);
 
-                        ruleConfidenceFacts.Add($"(assert (rule_confidence (ruleNumber {ruleNum}) (confidence {ruleConfidence.ToString(CultureInfo.InvariantCulture)})))");
                         ruleNum += 1;
                     }
                 }
